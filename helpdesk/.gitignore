@@ -1,1 +1,9 @@
 helpdesk_api/utils/crc_staff.csv
+.env
+**/.env
+*.pyc
+**/__pycache__/
+__pycache__/
+db.sqlite3
+staticfiles/
+*.sqlite3

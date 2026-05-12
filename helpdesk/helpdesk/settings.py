@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,14 +18,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['0.0.0.0:8080', 'helpdesk-api-92j8.onrender.com', 'localhost', 'ae87-62-173-38-93.ngrok-free.app']
+_allowed = os.getenv('ALLOWED_HOSTS', 'localhost')
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',')]
 
-CSRF_TRUSTED_ORIGINS = [' http://localhost:80', 'https://ae87-62-173-38-93.ngrok-free.app']
+CSRF_TRUSTED_ORIGINS = [
+    'https://itservicedesk.creditreferencenigeria.net',
+    'http://localhost:3000',
+]
 
 CORS_ALLOWED_ORIGINS = [
-    "https://crc-helpdesk.vercel.app",
+    "https://itservicedesk.creditreferencenigeria.net",
+    "http://localhost:3000",
 ]
 
 CORS_ALLOW_HEADERS = [
@@ -58,6 +63,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -66,7 +72,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'helpdesk.urls'

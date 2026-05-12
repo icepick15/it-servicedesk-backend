@@ -12,21 +12,18 @@ def func(file_path):
             last_name = row['Last Name']
             floor = row['Floor']
             department = row['Unit/Department']
-            password = row['Password']
-        
-            print (f"Email: {email}, First Name: {first_name}, Last Name: {last_name}, Floor: {floor}, Department: {department}, Password: {password}")
+
+            print(f"Email: {email}, First Name: {first_name}, Last Name: {last_name}, Floor: {floor}, Department: {department}")
 
             user = User(
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
                 floor=floor,
-                department=department
-                )
-
-            user.set_password(password)
+                department=department,
+            )
+            user.set_unusable_password()
             users.append(user)
-
 
     User.objects.bulk_create(users, batch_size=100)
     print(f"Successfully added {len(users)} users.")
