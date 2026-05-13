@@ -87,7 +87,8 @@ def microsoft_login(request):
     email_domain = email.split("@")[-1].lower()
 
     # 🔒 Domain restriction
-    if email_domain != "crccreditbureau.net":
+    allowed_domains = {"crccreditbureau.net", "crccreditbureau.com"}
+    if email_domain not in allowed_domains:
         return Response(
             {"detail": "Unauthorized email domain"},
             status=status.HTTP_403_FORBIDDEN
