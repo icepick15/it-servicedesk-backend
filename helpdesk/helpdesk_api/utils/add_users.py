@@ -25,5 +25,5 @@ def func(file_path):
             user.set_unusable_password()
             users.append(user)
 
-    User.objects.bulk_create(users, batch_size=100)
-    print(f"Successfully added {len(users)} users.")
+    created = User.objects.bulk_create(users, batch_size=100, ignore_conflicts=True)
+    print(f"Successfully added {len(created)} users (skipped existing).")
