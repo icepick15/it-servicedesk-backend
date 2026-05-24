@@ -27,19 +27,32 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         instance = self.Meta.model(**validated_data)
-        
+
         instance.is_active = True
         if password is not None:
             instance.set_password(password)
         instance.save()
         return instance
 
+class UserBasicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'first_name', 'last_name', 'email', 'role', 'department']
+
 class IssuesSerializer(serializers.ModelSerializer):
     conversations = serializers.SerializerMethodField()
+    assigned_to_details = UserBasicSerializer(source='assigned_to', read_only=True)
+    resolved_by_details = UserBasicSerializer(source='resolved_by', read_only=True)
 
     class Meta:
         model = Issues
-        fields = ['id', 'title', 'description', 'status', 'created_at', 'reported_by', 'conversations']
+        fields = [
+            'id', 'title', 'description', 'status', 'created_at',
+            'reported_by', 'resolved_on',
+            'assigned_to', 'assigned_to_details',
+            'resolved_by', 'resolved_by_details',
+            'conversations',
+        ]
 
     def get_conversations(self, obj):
         qs = obj.conversations.all().order_by('timestamp')

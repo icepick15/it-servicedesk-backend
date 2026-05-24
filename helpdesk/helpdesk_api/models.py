@@ -74,6 +74,8 @@ class Issues(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reported_issues')
     resolved_on = models.DateTimeField(null=True, blank=True)
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_issues')
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_issues')
 
     class Meta:
         ordering = ['-created_at']

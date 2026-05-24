@@ -146,48 +146,106 @@ class IssuesViewSet(viewsets.ModelViewSet):
     serializer_class = IssuesSerializer
     http_method_names = ['get', 'post', 'put', 'patch']
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'reported_by']
+    filterset_fields = ['status', 'reported_by', 'assigned_to']
 
     def partial_update(self, request, *args, **kwargs):
         issue = self.get_object()
         data = request.data.copy()
-        new_status = data.pop('status', None)
+        action = data.pop('action', None)
 
-        # Handle status change independently
-        if new_status is not None and new_status != issue.status:
-            issue.status = new_status
+        # --- CLAIM: any IT admin can claim an unassigned ticket ---
+        if action == 'claim':
+            if issue.assigned_to is not None:
+                return Response(
+                    {'detail': 'This issue has already been claimed.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            issue.assigned_to = request.user
+            issue.save()
+            serializer = self.get_serializer(issue)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # --- TRANSFER: only the current assignee can transfer ---
+        if action == 'transfer':
+            if issue.assigned_to is None or issue.assigned_to.id != request.user.id:
+                return Response(
+                    {'detail': 'Only the current assignee can transfer this issue.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            new_user_id = data.get('assigned_to')
+            try:
+                new_user = User.objects.get(id=new_user_id)
+            except User.DoesNotExist:
+                return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            issue.assigned_to = new_user
+            issue.save()
+            serializer = self.get_serializer(issue)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # --- RESOLVE: only the current assignee can resolve ---
+        if action == 'resolve':
+            if issue.assigned_to is None or issue.assigned_to.id != request.user.id:
+                return Response(
+                    {'detail': 'Only the assigned admin can resolve this issue.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            from django.utils import timezone
+            issue.status = 'completed'
+            issue.resolved_on = timezone.now()
+            issue.resolved_by = request.user
             issue.save()
 
             context = {
-                'ticket_id': 'CRC-'+str(issue.id),
+                'ticket_id': 'CRC-' + str(issue.id),
                 'title': issue.title,
                 'description': issue.description,
                 'date': issue.created_at,
-                'status': issue.status
+                'status': issue.status,
             }
+            send_mail(
+                subject='Issue CRC-' + str(issue.id) + ' Resolved',
+                to_email=issue.reported_by.email,
+                context=context,
+                type='status'
+            )
+            serializer = self.get_serializer(issue)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
-            status_messages = {
-                'completed': ('Issue CRC-'+str(issue.id)+' Resolved', 'status'),
-                'pending': ('Issue CRC-'+str(issue.id)+' Reopened', 'status'),
-            }
+        # --- REOPEN / generic status change (existing behaviour) ---
+        new_status = data.pop('status', None)
 
-            if new_status in status_messages:
-                subject, mail_type = status_messages[new_status]
+        if new_status is not None and new_status != issue.status:
+            if new_status == 'pending':
+                issue.status = 'pending'
+                issue.resolved_on = None
+                issue.resolved_by = None
+                issue.save()
+
+                context = {
+                    'ticket_id': 'CRC-' + str(issue.id),
+                    'title': issue.title,
+                    'description': issue.description,
+                    'date': issue.created_at,
+                    'status': issue.status,
+                }
                 send_mail(
-                    subject=subject,
+                    subject='Issue CRC-' + str(issue.id) + ' Reopened',
                     to_email=issue.reported_by.email,
                     context=context,
-                    type=mail_type
+                    type='status'
                 )
+            else:
+                issue.status = new_status
+                issue.save()
 
-        # Handle other fields separately
         if data:
             serializer = self.get_serializer(issue, data=data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
 
-        return Response({'status': 'updated'}, status=status.HTTP_200_OK)
+        serializer = self.get_serializer(issue)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
