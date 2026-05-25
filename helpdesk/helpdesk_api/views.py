@@ -25,6 +25,16 @@ import string
 
 from .models import User, Issues, Conversations
 from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, ConversationsSerializer
+
+def get_admin_emails():
+    return list(
+        User.objects.filter(role='admin', is_superuser=False, is_active=True)
+        .values_list('email', flat=True)
+    )
+
+def notify_all_admins(subject, context, email_type):
+    for email in get_admin_emails():
+        send_mail(subject=subject, to_email=email, context=context, type=email_type)
 def send_mail(subject, to_email, context, type):
         port = 587
         smtp_server =os.getenv('SMTP_SERVER')
@@ -266,18 +276,9 @@ class IssuesViewSet(viewsets.ModelViewSet):
             'date': issue.created_at,
         }
 
-        admin_email = os.getenv('ADMIN_EMAIL', 'isaac.enobun@crccreditbureau.net')
-
-        # To Admin
-        if send_mail(
-            subject="New Issue Reported",
-            to_email=admin_email,
-            context=context,
-            type="admin"
-        ):
-            print("Admin notification sent successfully.")
-        else:
-            print("Failed to send admin notification.")
+        # To all admins
+        notify_all_admins(subject="New Issue Reported", context=context, email_type="admin")
+        print("Admin notifications sent.")
 
         # To User
         if send_mail(
@@ -329,22 +330,20 @@ class ConversationsViewSet(viewsets.ModelViewSet):
         else:
             reporter = issue.reported_by
             reporter_name = f"{reporter.first_name or ''} {reporter.last_name or ''}".strip() or reporter.email
-            admin_email = os.getenv('ADMIN_EMAIL', 'isaac.enobun@crccreditbureau.net')
-            notify_email = issue.assigned_to.email if issue.assigned_to else admin_email
             context = {
                 'message': message,
                 'ticket_id': 'CRC-'+str(issue.id),
                 'sender': reporter_name,
             }
+            subject = "New Message on Issue (ID: CRC-"+str(issue.id)+")"
 
-            if send_mail(
-                subject="New Message on Issue (ID: CRC-"+str(issue.id)+")",
-                to_email=notify_email,
-                context=context,
-                type="message"
-            ):
-                print("Message notification sent successfully to admin.")
+            if issue.assigned_to:
+                # Notify only the assigned admin
+                send_mail(subject=subject, to_email=issue.assigned_to.email, context=context, type="message")
+                print("Message notification sent to assigned admin.")
             else:
-                print("Failed to send message notification to admin.")
+                # Unassigned — notify all admins
+                notify_all_admins(subject=subject, context=context, email_type="message")
+                print("Message notifications sent to all admins.")
 
             return super().create(request, *args, **kwargs)
