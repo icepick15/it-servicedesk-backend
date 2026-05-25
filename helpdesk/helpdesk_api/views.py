@@ -31,25 +31,27 @@ def send_mail(subject, to_email, context, type):
         username=os.getenv('EMAIL_USER')
         password =os.getenv('EMAIL_PASSWORD')
         
-        if type == "admin":
-            html_content = render_to_string('admin_notification.html', context)
-        elif type == "user":
-            html_content = render_to_string('user_notification.html', context)
-        elif type == "message":
-            html_content = render_to_string('message_notification.html', context)
-        elif type == "status":
-            html_content = render_to_string('status_notification.html', context)
-
-        msg = EmailMessage()
-        msg['Subject'] = subject
-        msg['From'] = "IThelpdesk@creditreferencenigeria.net"
-        msg['To'] = [to_email]
-        msg.set_content(html_content, subtype='html')
-        
         try:
+            if type == "admin":
+                html_content = render_to_string('creation_admin.html', context)
+            elif type == "user":
+                html_content = render_to_string('creation_user.html', context)
+            elif type == "message":
+                html_content = render_to_string('message_notification.html', context)
+            elif type == "status":
+                html_content = render_to_string('status.html', context)
+            else:
+                return False
+
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = "IThelpdesk@creditreferencenigeria.net"
+            msg['To'] = [to_email]
+            msg.set_content(html_content, subtype='html')
+
             if port == 465:
-                context = ssl.create_default_context()
-                with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+                ssl_context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(smtp_server, port, context=ssl_context) as server:
                     server.login(username, password)
                     server.send_message(msg)
             elif port == 587:
@@ -58,11 +60,11 @@ def send_mail(subject, to_email, context, type):
                     server.login(username, password)
                     server.send_message(msg)
             else:
-                print ("use 465 / 587 as port value")
-                exit()
+                print("use 465 / 587 as port value")
+                return False
             return True
         except Exception as e:
-            print (e)
+            print(e)
             return False
 
 @api_view(["POST"])
