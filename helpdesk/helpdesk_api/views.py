@@ -254,11 +254,13 @@ class IssuesViewSet(viewsets.ModelViewSet):
         response = super().create(request, *args, **kwargs)
         issue = Issues.objects.get(id=response.data['id'])
         
+        reporter = issue.reported_by
+        reporter_name = f"{reporter.first_name or ''} {reporter.last_name or ''}".strip() or reporter.email
         context = {
             'ticket_id': 'CRC-'+str(issue.id),
             'title': issue.title,
             'description': issue.description,
-            'reported_by': issue.reported_by.first_name + ' ' + issue.reported_by.last_name,
+            'reported_by': reporter_name,
             'date': issue.created_at,
         }
 
@@ -300,12 +302,14 @@ class ConversationsViewSet(viewsets.ModelViewSet):
         issue = Issues.objects.get(id=request.data.get('issue'))
         sender = User.objects.get(id=request.data.get('sender'))
 
+        sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or sender.email
+
         if sender.role == 'admin':
 
             context = {
                 'message': message,
                 'ticket_id': 'CRC-'+str(issue.id),
-                'sender': sender.first_name + ' ' + sender.last_name,
+                'sender': sender_name,
             }
 
             if send_mail(
@@ -322,10 +326,12 @@ class ConversationsViewSet(viewsets.ModelViewSet):
             return super().create(request, *args, **kwargs)
 
         else:
+            reporter = issue.reported_by
+            reporter_name = f"{reporter.first_name or ''} {reporter.last_name or ''}".strip() or reporter.email
             context = {
                 'message': message,
                 'ticket_id': 'CRC-'+str(issue.id),
-                'sender': issue.reported_by.first_name + ' ' + issue.reported_by.last_name,
+                'sender': reporter_name,
             }
 
             if send_mail(
