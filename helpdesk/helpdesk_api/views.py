@@ -124,7 +124,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     http_method_names = ['get', 'post', 'put', 'patch']
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['email']
+    filterset_fields = ['email', 'role']
 
     def partial_update(self, request, *args, **kwargs):
         user = self.get_object()
