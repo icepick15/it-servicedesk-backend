@@ -266,11 +266,12 @@ class IssuesViewSet(viewsets.ModelViewSet):
             'date': issue.created_at,
         }
 
+        admin_email = os.getenv('ADMIN_EMAIL', 'isaac.enobun@crccreditbureau.net')
+
         # To Admin
         if send_mail(
             subject="New Issue Reported",
-            # to_email= technology.admin_email,
-            to_email="isaac.enobun@crccreditbureau.net",
+            to_email=admin_email,
             context=context,
             type="admin"
         ):
@@ -281,8 +282,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
         # To User
         if send_mail(
             subject="Issue Reported Successfully",
-            # to_email=issue.reported_by.email,
-            to_email="isaac.enobun@crccreditbureau.net",
+            to_email=reporter.email,
             context=context,
             type="user"
         ):
@@ -316,8 +316,7 @@ class ConversationsViewSet(viewsets.ModelViewSet):
 
             if send_mail(
                 subject="New Message on Issue (ID: CRC-"+str(issue.id)+")",
-                # to_email=issue.reported_by.email,
-                to_email="isaac.enobun@crccreditbureau.net",
+                to_email=issue.reported_by.email,
                 context=context,
                 type="message"
             ):
@@ -330,6 +329,8 @@ class ConversationsViewSet(viewsets.ModelViewSet):
         else:
             reporter = issue.reported_by
             reporter_name = f"{reporter.first_name or ''} {reporter.last_name or ''}".strip() or reporter.email
+            admin_email = os.getenv('ADMIN_EMAIL', 'isaac.enobun@crccreditbureau.net')
+            notify_email = issue.assigned_to.email if issue.assigned_to else admin_email
             context = {
                 'message': message,
                 'ticket_id': 'CRC-'+str(issue.id),
@@ -338,8 +339,7 @@ class ConversationsViewSet(viewsets.ModelViewSet):
 
             if send_mail(
                 subject="New Message on Issue (ID: CRC-"+str(issue.id)+")",
-                # to_email=technology.admin_email,
-                to_email="isaac.enobun@crccreditbureau.net",
+                to_email=notify_email,
                 context=context,
                 type="message"
             ):
