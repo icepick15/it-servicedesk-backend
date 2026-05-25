@@ -1,51 +1,84 @@
 <!DOCTYPE html>
-<html>
-  <body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color:#eef1f4;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr>
-        <td align="center" style="padding:24px;">
-          <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff; border-collapse:collapse;">
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Message — CRC IT Service Desk</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(26,54,93,0.12);">
 
-            <tr>
-              <td width="6" style="background-color:#4f7cff;"></td>
-              <td style="padding:16px 18px; font-size:15px; font-weight:bold; color:#111;">
-                New message received
-              </td>
-            </tr>
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#1a365d;padding:28px 40px;text-align:center;">
+              <img src="https://itservicedesk.creditreferencenigeria.net/crc-icon.png" alt="CRC Credit Bureau" width="56" height="56" style="display:block;margin:0 auto 12px;border-radius:8px;">
+              <p style="color:#ffffff;font-size:18px;font-weight:700;margin:0;letter-spacing:0.3px;">CRC IT Service Desk</p>
+              <p style="color:#a8bcd4;font-size:12px;margin:4px 0 0;letter-spacing:1px;text-transform:uppercase;">New Message on Your Ticket</p>
+            </td>
+          </tr>
 
-            <tr>
-              <td width="6"></td>
-              <td style="padding:10px 18px; font-size:12px; color:#555;">
-                <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="width:100px; color:#888; padding:4px 0;">Issue</td>
-                    <td style="padding:4px 0; font-weight:bold;">{{ticket_id}}</td>
-                  </tr>
-                  <tr>
-                    <td style="color:#888; padding:4px 0;">Sender</td>
-                    <td style="padding:4px 0;">{{sender}}</td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
+          <!-- Accent bar -->
+          <tr>
+            <td style="height:3px;background:linear-gradient(90deg,#1a365d,#2d6cba,#1a365d);"></td>
+          </tr>
 
-            <tr>
-              <td width="6"></td>
-              <td style="padding:12px 18px; font-size:13px; color:#222; border-top:1px solid #e5e5e5; line-height:1.6;">
-                {{message}}
-              </td>
-            </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="color:#1a365d;font-size:20px;font-weight:700;margin:0 0 6px;">You have a new message</p>
+              <p style="color:#64748b;font-size:14px;margin:0 0 28px;">
+                <strong style="color:#1e293b;">{{ sender }}</strong> has sent a message on ticket <strong style="color:#1a365d;">{{ ticket_id }}</strong>.
+              </p>
 
-            <tr>
-              <td width="6"></td>
-              <td style="padding:10px 18px; font-size:11px; color:#888; border-top:1px solid #e5e5e5;">
-                This is an automated notification for activity on your issue.
-              </td>
-            </tr>
+              <!-- Message bubble -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+                <tr>
+                  <td style="background-color:#f0f4f8;border-radius:8px;border-left:4px solid #2d6cba;padding:20px 24px;">
+                    <p style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Message</p>
+                    <p style="color:#1e293b;font-size:14px;line-height:1.7;margin:0;white-space:pre-line;">{{ message }}</p>
+                  </td>
+                </tr>
+              </table>
 
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
+              <!-- Ticket ref -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+                <tr>
+                  <td style="padding:12px 16px;background-color:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">
+                    <p style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Ticket Reference</p>
+                    <p style="color:#1a365d;font-size:14px;font-weight:700;margin:0;">{{ ticket_id }}</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background-color:#1a365d;border-radius:6px;">
+                    <a href="https://itservicedesk.creditreferencenigeria.net" target="_blank" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;letter-spacing:0.3px;">
+                      Reply on Portal →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
+              <p style="color:#1a365d;font-size:13px;font-weight:600;margin:0 0 2px;">CRC Credit Bureau Limited</p>
+              <p style="color:#94a3b8;font-size:11px;margin:0;line-height:1.5;">
+                IT Service Desk &nbsp;·&nbsp; This is an automated notification. Do not reply to this email.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
 </html>

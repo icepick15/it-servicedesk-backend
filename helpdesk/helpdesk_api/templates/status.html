@@ -1,139 +1,100 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ticket Status Update — Rugby School Nigeria</title>
+  <title>Ticket Update — CRC IT Service Desk</title>
 </head>
-<body style="margin:0;padding:0;background-color:#F4F6FB;font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F4F6FB;padding:32px 16px;">
+<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:12px;overflow:hidden;box-shadow:0 6px 28px rgba(38,41,65,0.12);">
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(26,54,93,0.12);">
 
-```
-      <!-- Header -->
-      <tr>
-        <td style="background:linear-gradient(135deg,#262941 0%,#3A3F63 100%);padding:32px 40px;text-align:center;">
-          <img src="cid:{{ image_cid }}" alt="Rugby School Nigeria" width="160" height="auto" style="display:block;margin:0 auto 12px;">
-          
-          <!-- Decorative Divider -->
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-            <tr>
-              <td style="width:40px;height:2px;background-color:#8B9EFF;"></td>
-              <td style="width:16px;"></td>
-              <td style="width:8px;height:8px;background-color:#8B9EFF;border-radius:50%;"></td>
-              <td style="width:16px;"></td>
-              <td style="width:40px;height:2px;background-color:#8B9EFF;"></td>
-            </tr>
-          </table>
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#1a365d;padding:28px 40px;text-align:center;">
+              <img src="https://itservicedesk.creditreferencenigeria.net/crc-icon.png" alt="CRC Credit Bureau" width="56" height="56" style="display:block;margin:0 auto 12px;border-radius:8px;">
+              <p style="color:#ffffff;font-size:18px;font-weight:700;margin:0;letter-spacing:0.3px;">CRC IT Service Desk</p>
+              <p style="color:#a8bcd4;font-size:12px;margin:4px 0 0;letter-spacing:1px;text-transform:uppercase;">Ticket Status Update</p>
+            </td>
+          </tr>
 
-          <p style="color:#D6DBFF;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin:12px 0 0;font-weight:600;">
-            Ticket Status Update
-          </p>
-        </td>
-      </tr>
+          <!-- Accent bar -->
+          <tr>
+            <td style="height:3px;background:linear-gradient(90deg,#1a365d,#2d6cba,#1a365d);"></td>
+          </tr>
 
-      <!-- Accent Bar -->
-      <tr>
-        <td style="height:4px;background:linear-gradient(90deg,#8B9EFF,#262941,#8B9EFF);"></td>
-      </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
 
-      <!-- Body -->
-      <tr>
-        <td style="padding:40px;">
-          <h1 style="color:#1C1F33;font-size:22px;font-weight:700;margin:0 0 8px;">Ticket Status Changed</h1>
-          <p style="color:#6B7280;font-size:14px;margin:0 0 24px;">Hello, there's an update on your ticket.</p>
+              {% if status == 'completed' %}
+              <!-- Resolved state -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                <tr>
+                  <td style="background-color:#dcfce7;border:1px solid #16a34a;border-radius:20px;padding:6px 16px;">
+                    <p style="color:#15803d;font-size:12px;font-weight:700;margin:0;text-transform:uppercase;letter-spacing:0.5px;">✓ &nbsp;Resolved</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="color:#1a365d;font-size:20px;font-weight:700;margin:0 0 6px;">Your ticket has been resolved</p>
+              <p style="color:#64748b;font-size:14px;margin:0 0 28px;">Great news — your IT support request has been resolved by our team. If you're still experiencing issues, you can reopen the ticket from the portal.</p>
+              {% else %}
+              <!-- Reopened / other state -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+                <tr>
+                  <td style="background-color:#fef3c7;border:1px solid #f59e0b;border-radius:20px;padding:6px 16px;">
+                    <p style="color:#92400e;font-size:12px;font-weight:700;margin:0;text-transform:uppercase;letter-spacing:0.5px;">↺ &nbsp;Reopened</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="color:#1a365d;font-size:20px;font-weight:700;margin:0 0 6px;">Your ticket has been reopened</p>
+              <p style="color:#64748b;font-size:14px;margin:0 0 28px;">Your IT support ticket has been reopened and is back in the queue. Our team will follow up shortly.</p>
+              {% endif %}
 
-          <!-- Ticket Info -->
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr>
-              <td style="padding:20px 24px;background-color:#EEF1FF;border-radius:12px;">
-                <p style="color:#6B7280;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 4px;font-weight:600;">IT Helpdesk Ticket</p>
-                <p style="color:#1C1F33;font-size:18px;font-weight:700;margin:0;">{{ title }}</p>
-                {% if id %}
-                <p style="color:#9CA3AF;font-size:12px;margin:4px 0 0;">RS-TCK-{{ id }}</p>
-                {% endif %}
-              </td>
-            </tr>
-          </table>
+              <!-- Ticket card -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;border-radius:8px;border-left:4px solid #1a365d;margin-bottom:24px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Ticket ID</p>
+                    <p style="color:#1a365d;font-size:15px;font-weight:700;margin:0 0 16px;">{{ ticket_id }}</p>
+                    <p style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Subject</p>
+                    <p style="color:#1e293b;font-size:15px;font-weight:600;margin:0 0 16px;">{{ title }}</p>
+                    {% if description %}
+                    <p style="color:#94a3b8;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Description</p>
+                    <p style="color:#475569;font-size:14px;line-height:1.6;margin:0;">{{ description }}</p>
+                    {% endif %}
+                  </td>
+                </tr>
+              </table>
 
-          <!-- Status Change -->
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr>
-              <!-- Previous -->
-              <!-- <td width="45%" style="text-align:center;padding:16px;background-color:#EEF1FF;border-radius:8px;">
-                <p style="color:#6B7280;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;font-weight:600;">Previous Status</p>
-                <p style="color:#6B7280;font-size:14px;font-weight:700;margin:0;">{{ previous_status }}</p>
-              </td> -->
+              <!-- CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background-color:#1a365d;border-radius:6px;">
+                    <a href="https://itservicedesk.creditreferencenigeria.net/dashboard" target="_blank" style="display:inline-block;padding:12px 28px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;letter-spacing:0.3px;">
+                      View Ticket →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-              <!-- Arrow -->
-              <!-- <td width="10%" style="text-align:center;vertical-align:middle;">
-                <span style="color:#8B9EFF;font-size:20px;font-weight:700;">&#8594;</span>
-              </td> -->
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:20px 40px;text-align:center;">
+              <p style="color:#1a365d;font-size:13px;font-weight:600;margin:0 0 2px;">CRC Credit Bureau Limited</p>
+              <p style="color:#94a3b8;font-size:11px;margin:0;line-height:1.5;">
+                IT Service Desk &nbsp;·&nbsp; This is an automated notification. Do not reply to this email.
+              </p>
+            </td>
+          </tr>
 
-              <!-- New -->
-              <td width="45%" style="text-align:center;padding:16px;background-color:#262941;border-radius:8px;">
-                <p style="color:#AAB0D6;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;font-weight:600;">New Status</p>
-                <p style="color:#FFFFFF;font-size:14px;font-weight:700;margin:0;">{{ status }}</p>
-              </td>
-            </tr>
-          </table>
-
-          <!-- Description -->
-          {% if description %}
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-            <tr>
-              <td style="padding:10px 16px;border-bottom:1px solid #E5E7EB;color:#6B7280;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;width:40%;">
-                Description
-              </td>
-              <td style="padding:10px 16px;border-bottom:1px solid #E5E7EB;color:#1C1F33;font-size:14px;font-weight:600;">
-                {{ description }}
-              </td>
-            </tr>
-          </table>
-          {% endif %}
-
-          <!-- CTA Button -->
-          {% if action_url %}
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-            <tr>
-              <td style="background-color:#262941;border-radius:8px;">
-                <a href="{{ action_url }}" target="_blank" style="display:inline-block;padding:14px 32px;color:#FFFFFF;font-size:14px;font-weight:600;text-decoration:none;letter-spacing:0.5px;">
-                  View Issue Details
-                </a>
-              </td>
-            </tr>
-          </table>
-          {% endif %}
-        </td>
-      </tr>
-
-      <!-- Footer -->
-      <tr>
-        <td style="background-color:#262941;padding:32px 40px;text-align:center;">
-          <p style="color:#FFFFFF;font-size:13px;font-weight:600;margin:0 0 4px;">Rugby School Nigeria</p>
-          <p style="color:#AAB0D6;font-size:12px;margin:0 0 16px;">Helpdesk System</p>
-
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-            <tr>
-              <td style="width:60px;height:1px;background-color:#8B9EFF;"></td>
-            </tr>
-          </table>
-
-          <p style="color:#AAB0D6;font-size:11px;margin:16px 0 0;line-height:1.5;">
-            This is an automated notification from the Rugby School Nigeria Helpdesk.<br>
-            Please do not reply directly to this email.
-          </p>
-        </td>
-      </tr>
-
-    </table>
-  </td>
-</tr>
-```
-
+        </table>
+      </td>
+    </tr>
   </table>
 </body>
 </html>
