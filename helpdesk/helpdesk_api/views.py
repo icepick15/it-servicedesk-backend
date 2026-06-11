@@ -51,6 +51,8 @@ def send_mail(subject, to_email, context, type):
                 html_content = render_to_string('message_notification.html', context)
             elif type == "status":
                 html_content = render_to_string('status.html', context)
+            elif type == "transfer":
+                html_content = render_to_string('transfer_notification.html', context)
             else:
                 return False
 
@@ -149,6 +151,15 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def partial_update(self, request, *args, **kwargs):
         user = self.get_object()
+
+        is_self = request.user.id == user.id
+        is_admin = request.user.is_superuser or (request.user.role or '').lower() == 'admin'
+        if not (is_self or is_admin):
+            return Response(
+                {'detail': 'You can only update your own account.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         data = request.data.copy()
         password = data.pop('password', None)
 
@@ -207,6 +218,39 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 )
             issue.assigned_to = new_user
             issue.save()
+
+            from_admin = f"{request.user.first_name or ''} {request.user.last_name or ''}".strip() or request.user.email
+            to_admin = f"{new_user.first_name or ''} {new_user.last_name or ''}".strip() or new_user.email
+            base_context = {
+                'ticket_id': 'CRC-' + str(issue.id),
+                'title': issue.title,
+                'description': issue.description,
+                'from_admin': from_admin,
+                'to_admin': to_admin,
+            }
+            # Notify the new assignee
+            send_mail(
+                subject='Issue CRC-' + str(issue.id) + ' Transferred to You',
+                to_email=new_user.email,
+                context={
+                    **base_context,
+                    'recipient': 'assignee',
+                    'cta_url': f'https://itservicedesk.creditreferencenigeria.net/admin/issues/{issue.id}',
+                },
+                type='transfer'
+            )
+            # Notify the staff member who reported the issue
+            send_mail(
+                subject='Issue CRC-' + str(issue.id) + ' Reassigned',
+                to_email=issue.reported_by.email,
+                context={
+                    **base_context,
+                    'recipient': 'reporter',
+                    'cta_url': 'https://itservicedesk.creditreferencenigeria.net/dashboard',
+                },
+                type='transfer'
+            )
+
             serializer = self.get_serializer(issue)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
