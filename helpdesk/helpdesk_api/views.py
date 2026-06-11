@@ -1,6 +1,7 @@
 import os
 from django.shortcuts import render
 from rest_framework import viewsets
+import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
@@ -28,7 +29,7 @@ from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSeri
 
 def get_admin_emails():
     return list(
-        User.objects.filter(role='admin', is_superuser=False, is_active=True)
+        User.objects.filter(role__iexact='admin', is_superuser=False, is_active=True)
         .values_list('email', flat=True)
     )
 
@@ -129,12 +130,22 @@ class MyTokenObtainPairView(TokenObtainPairView):
     """
     serializer_class = MyTokenObtainPairSerializer
 
+class UserFilter(django_filters.FilterSet):
+    # Role values in the DB have inconsistent casing ('admin' vs 'Admin'),
+    # so match case-insensitively to avoid silently dropping users.
+    email = django_filters.CharFilter(lookup_expr='iexact')
+    role = django_filters.CharFilter(lookup_expr='iexact')
+
+    class Meta:
+        model = User
+        fields = ['email', 'role', 'is_active']
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     http_method_names = ['get', 'post', 'put', 'patch']
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['email', 'role']
+    filterset_class = UserFilter
 
     def partial_update(self, request, *args, **kwargs):
         user = self.get_object()
@@ -186,9 +197,14 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 )
             new_user_id = data.get('assigned_to')
             try:
-                new_user = User.objects.get(id=new_user_id)
+                new_user = User.objects.get(id=new_user_id, is_active=True)
             except User.DoesNotExist:
                 return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if (new_user.role or '').lower() != 'admin':
+                return Response(
+                    {'detail': 'Issues can only be transferred to IT admins.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             issue.assigned_to = new_user
             issue.save()
             serializer = self.get_serializer(issue)
