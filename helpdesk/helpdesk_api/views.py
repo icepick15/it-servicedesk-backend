@@ -1,5 +1,5 @@
 import os
-from django.shortcuts import render
+import threading
 from rest_framework import viewsets
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
@@ -13,6 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from helpdesk.utils.microsoft import verify_microsoft_token
 
 from django.template.loader import render_to_string
+from django.db.models import Prefetch, Count, Q
 
 # SMTP
 import smtplib, ssl
@@ -21,11 +22,11 @@ from email.message import EmailMessage
 from dotenv import load_dotenv
 load_dotenv()
 
-import random
-import string
-
 from .models import User, Issues, Conversations
-from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, ConversationsSerializer
+from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, IssuesListSerializer, ConversationsSerializer
+
+def is_admin_user(user):
+    return user.is_superuser or (user.role or '').lower() == 'admin'
 
 def get_admin_emails():
     return list(
@@ -36,6 +37,22 @@ def get_admin_emails():
 def notify_all_admins(subject, context, email_type):
     for email in get_admin_emails():
         send_mail(subject=subject, to_email=email, context=context, type=email_type)
+
+def send_mail_async(subject, to_email, context, type):
+    thread = threading.Thread(
+        target=send_mail,
+        kwargs={'subject': subject, 'to_email': to_email, 'context': context, 'type': type},
+        daemon=True,
+    )
+    thread.start()
+
+def notify_all_admins_async(subject, context, email_type):
+    thread = threading.Thread(
+        target=notify_all_admins,
+        kwargs={'subject': subject, 'context': context, 'email_type': email_type},
+        daemon=True,
+    )
+    thread.start()
 def send_mail(subject, to_email, context, type):
         port = 587
         smtp_server =os.getenv('SMTP_SERVER')
@@ -132,6 +149,29 @@ class MyTokenObtainPairView(TokenObtainPairView):
     """
     serializer_class = MyTokenObtainPairSerializer
 
+@api_view(['GET'])
+def issue_stats(request):
+    stats = Issues.objects.aggregate(
+        total=Count('id'),
+        pending=Count('id', filter=Q(status='pending')),
+        completed=Count('id', filter=Q(status='completed')),
+    )
+    return Response(stats)
+
+class IssueFilter(django_filters.FilterSet):
+    month = django_filters.CharFilter(method='filter_by_month')
+
+    class Meta:
+        model = Issues
+        fields = ['status', 'reported_by', 'assigned_to']
+
+    def filter_by_month(self, queryset, name, value):
+        try:
+            year, month_num = value.split('-')
+            return queryset.filter(created_at__year=int(year), created_at__month=int(month_num))
+        except (ValueError, AttributeError):
+            return queryset
+
 class UserFilter(django_filters.FilterSet):
     # Role values in the DB have inconsistent casing ('admin' vs 'Admin'),
     # so match case-insensitively to avoid silently dropping users.
@@ -153,7 +193,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
 
         is_self = request.user.id == user.id
-        is_admin = request.user.is_superuser or (request.user.role or '').lower() == 'admin'
+        is_admin = is_admin_user(request.user)
         if not (is_self or is_admin):
             return Response(
                 {'detail': 'You can only update your own account.'},
@@ -176,11 +216,22 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({'status': 'password set'}, status=status.HTTP_200_OK)
 
 class IssuesViewSet(viewsets.ModelViewSet):
-    queryset = Issues.objects.all()
-    serializer_class = IssuesSerializer
     http_method_names = ['get', 'post', 'put', 'patch']
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'reported_by', 'assigned_to']
+    filterset_class = IssueFilter
+
+    def get_queryset(self):
+        base = Issues.objects.select_related('reported_by', 'assigned_to', 'resolved_by')
+        if self.action == 'list':
+            return base.annotate(conversation_count=Count('conversations'))
+        return base.prefetch_related(
+            Prefetch('conversations', queryset=Conversations.objects.select_related('sender'))
+        )
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return IssuesListSerializer
+        return IssuesSerializer
 
     def partial_update(self, request, *args, **kwargs):
         issue = self.get_object()
@@ -211,7 +262,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 new_user = User.objects.get(id=new_user_id, is_active=True)
             except User.DoesNotExist:
                 return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-            if (new_user.role or '').lower() != 'admin':
+            if not is_admin_user(new_user):
                 return Response(
                     {'detail': 'Issues can only be transferred to IT admins.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -229,7 +280,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 'to_admin': to_admin,
             }
             # Notify the new assignee
-            send_mail(
+            send_mail_async(
                 subject='Issue CRC-' + str(issue.id) + ' Transferred to You',
                 to_email=new_user.email,
                 context={
@@ -240,7 +291,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 type='transfer'
             )
             # Notify the staff member who reported the issue
-            send_mail(
+            send_mail_async(
                 subject='Issue CRC-' + str(issue.id) + ' Reassigned',
                 to_email=issue.reported_by.email,
                 context={
@@ -274,7 +325,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 'date': issue.created_at,
                 'status': issue.status,
             }
-            send_mail(
+            send_mail_async(
                 subject='Issue CRC-' + str(issue.id) + ' Resolved',
                 to_email=issue.reported_by.email,
                 context=context,
@@ -300,7 +351,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
                     'date': issue.created_at,
                     'status': issue.status,
                 }
-                send_mail(
+                send_mail_async(
                     subject='Issue CRC-' + str(issue.id) + ' Reopened',
                     to_email=issue.reported_by.email,
                     context=context,
@@ -322,36 +373,23 @@ class IssuesViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        issue = serializer.save()
+        headers = self.get_success_headers(serializer.data)
 
-        response = super().create(request, *args, **kwargs)
-        issue = Issues.objects.get(id=response.data['id'])
-        
         reporter = issue.reported_by
         reporter_name = f"{reporter.first_name or ''} {reporter.last_name or ''}".strip() or reporter.email
         context = {
-            'ticket_id': 'CRC-'+str(issue.id),
+            'ticket_id': 'CRC-' + str(issue.id),
             'title': issue.title,
             'description': issue.description,
             'reported_by': reporter_name,
             'date': issue.created_at,
         }
 
-        # To all admins
-        notify_all_admins(subject="New Issue Reported", context=context, email_type="admin")
-        print("Admin notifications sent.")
+        notify_all_admins_async(subject="New Issue Reported", context=context, email_type="admin")
+        send_mail_async(subject="Issue Reported Successfully", to_email=reporter.email, context=context, type="user")
 
-        # To User
-        if send_mail(
-            subject="Issue Reported Successfully",
-            to_email=reporter.email,
-            context=context,
-            type="user"
-        ):
-            print("User notification sent successfully.")
-        else:
-            print("Failed to send user notification.")
-
-        return response
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 class ConversationsViewSet(viewsets.ModelViewSet):
     queryset = Conversations.objects.all()
@@ -367,24 +405,18 @@ class ConversationsViewSet(viewsets.ModelViewSet):
 
         sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or sender.email
 
-        if sender.role == 'admin':
-
+        if is_admin_user(sender):
             context = {
                 'message': message,
-                'ticket_id': 'CRC-'+str(issue.id),
+                'ticket_id': 'CRC-' + str(issue.id),
                 'sender': sender_name,
             }
-
-            if send_mail(
-                subject="New Message on Issue (ID: CRC-"+str(issue.id)+")",
+            send_mail_async(
+                subject="New Message on Issue (ID: CRC-" + str(issue.id) + ")",
                 to_email=issue.reported_by.email,
                 context=context,
                 type="message"
-            ):
-                print("Message notification sent successfully to user.")
-            else:
-                print("Failed to send message notification to user.")
-
+            )
             return super().create(request, *args, **kwargs)
 
         else:
@@ -392,18 +424,14 @@ class ConversationsViewSet(viewsets.ModelViewSet):
             reporter_name = f"{reporter.first_name or ''} {reporter.last_name or ''}".strip() or reporter.email
             context = {
                 'message': message,
-                'ticket_id': 'CRC-'+str(issue.id),
+                'ticket_id': 'CRC-' + str(issue.id),
                 'sender': reporter_name,
             }
-            subject = "New Message on Issue (ID: CRC-"+str(issue.id)+")"
+            subject = "New Message on Issue (ID: CRC-" + str(issue.id) + ")"
 
             if issue.assigned_to:
-                # Notify only the assigned admin
-                send_mail(subject=subject, to_email=issue.assigned_to.email, context=context, type="message")
-                print("Message notification sent to assigned admin.")
+                send_mail_async(subject=subject, to_email=issue.assigned_to.email, context=context, type="message")
             else:
-                # Unassigned — notify all admins
-                notify_all_admins(subject=subject, context=context, email_type="message")
-                print("Message notifications sent to all admins.")
+                notify_all_admins_async(subject=subject, context=context, email_type="message")
 
             return super().create(request, *args, **kwargs)

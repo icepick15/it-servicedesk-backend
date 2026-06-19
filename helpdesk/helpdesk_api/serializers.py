@@ -42,16 +42,34 @@ class UserBasicSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'first_name', 'last_name', 'email', 'role', 'department']
 
-class IssuesSerializer(serializers.ModelSerializer):
-    conversations = serializers.SerializerMethodField()
+class IssuesListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list views — no conversation payloads."""
     assigned_to_details = UserBasicSerializer(source='assigned_to', read_only=True)
     resolved_by_details = UserBasicSerializer(source='resolved_by', read_only=True)
+    reported_by_details = UserBasicSerializer(source='reported_by', read_only=True)
+    conversation_count = serializers.IntegerField(read_only=True)  # from queryset annotation
 
     class Meta:
         model = Issues
         fields = [
             'id', 'title', 'description', 'status', 'created_at',
-            'reported_by', 'resolved_on',
+            'reported_by', 'reported_by_details', 'resolved_on',
+            'assigned_to', 'assigned_to_details',
+            'resolved_by', 'resolved_by_details',
+            'conversation_count',
+        ]
+
+class IssuesSerializer(serializers.ModelSerializer):
+    conversations = serializers.SerializerMethodField()
+    assigned_to_details = UserBasicSerializer(source='assigned_to', read_only=True)
+    resolved_by_details = UserBasicSerializer(source='resolved_by', read_only=True)
+    reported_by_details = UserBasicSerializer(source='reported_by', read_only=True)
+
+    class Meta:
+        model = Issues
+        fields = [
+            'id', 'title', 'description', 'status', 'created_at',
+            'reported_by', 'reported_by_details', 'resolved_on',
             'assigned_to', 'assigned_to_details',
             'resolved_by', 'resolved_by_details',
             'conversations',

@@ -107,9 +107,10 @@ ASGI_APPLICATION = 'helpdesk.asgi.application'
 # }
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL')
-    )
+    'default': {
+        **dj_database_url.config(default=os.getenv('DATABASE_URL')),
+        'CONN_MAX_AGE': 600,
+    }
 }
 
 # Password validation

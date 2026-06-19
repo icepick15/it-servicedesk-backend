@@ -72,13 +72,17 @@ class Issues(models.Model):
     description = models.TextField()
     status = models.CharField(max_length=20, default='pending', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reported_issues')
+    reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reported_issues', db_index=True)
     resolved_on = models.DateTimeField(null=True, blank=True)
-    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_issues')
-    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_issues')
+    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_issues', db_index=True)
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_issues', db_index=True)
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['reported_by', 'status'], name='issues_reported_by_status_idx'),
+            models.Index(fields=['assigned_to', 'status'], name='issues_assigned_to_status_idx'),
+        ]
 
     def __str__(self):
         return self.title
