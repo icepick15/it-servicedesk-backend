@@ -90,7 +90,7 @@ def send_mail(subject, to_email, context, type):
 
             msg = EmailMessage()
             msg['Subject'] = subject
-            msg['From'] = "IThelpdesk@creditreferencenigeria.net"
+            msg['From'] = "itservicedesk@creditreferencenigeria.net"
             msg['To'] = [to_email]
             msg.set_content(html_content, subtype='html')
 
