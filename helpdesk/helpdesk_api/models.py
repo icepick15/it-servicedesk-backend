@@ -68,14 +68,25 @@ class User(AbstractUser):
         return self.email
 
 class Issues(models.Model):
+    SEVERITY_CHOICES = [
+        ('critical', 'Critical'),
+        ('high', 'High'),
+        ('low', 'Low'),
+        ('minor', 'Minor'),
+    ]
+
     title = models.CharField(max_length=100)
     description = models.TextField()
     status = models.CharField(max_length=20, default='pending', db_index=True)
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='low', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reported_issues', db_index=True)
     resolved_on = models.DateTimeField(null=True, blank=True)
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_issues', db_index=True)
     resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_issues', db_index=True)
+    sla_resolve_by = models.DateTimeField(null=True, blank=True)
+    sla_acknowledged = models.BooleanField(null=True, blank=True)
+    escalation_tier = models.IntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']

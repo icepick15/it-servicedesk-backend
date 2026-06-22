@@ -1,5 +1,6 @@
 import os
 import threading
+from datetime import timedelta
 from rest_framework import viewsets
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
@@ -14,6 +15,7 @@ from helpdesk.utils.microsoft import verify_microsoft_token
 
 from django.template.loader import render_to_string
 from django.db.models import Prefetch, Count, Q
+from django.utils import timezone
 
 # SMTP
 import smtplib, ssl
@@ -21,6 +23,13 @@ from email.message import EmailMessage
 
 from dotenv import load_dotenv
 load_dotenv()
+
+SLA_HOURS = {
+    'critical': 6,
+    'high': 12,
+    'low': 24,
+    'minor': 48,
+}
 
 from .models import User, Issues, Conversations
 from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, IssuesListSerializer, ConversationsSerializer
@@ -70,6 +79,12 @@ def send_mail(subject, to_email, context, type):
                 html_content = render_to_string('status.html', context)
             elif type == "transfer":
                 html_content = render_to_string('transfer_notification.html', context)
+            elif type == "sla_unclaimed_breach":
+                html_content = render_to_string('sla_unclaimed_breach.html', context)
+            elif type == "sla_resolution_warning":
+                html_content = render_to_string('sla_resolution_warning.html', context)
+            elif type == "sla_resolution_breach":
+                html_content = render_to_string('sla_resolution_breach.html', context)
             else:
                 return False
 
@@ -163,7 +178,7 @@ class IssueFilter(django_filters.FilterSet):
 
     class Meta:
         model = Issues
-        fields = ['status', 'reported_by', 'assigned_to']
+        fields = ['status', 'reported_by', 'assigned_to', 'severity']
 
     def filter_by_month(self, queryset, name, value):
         try:
@@ -245,8 +260,10 @@ class IssuesViewSet(viewsets.ModelViewSet):
                     {'detail': 'This issue has already been claimed.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            now = timezone.now()
             issue.assigned_to = request.user
-            issue.save()
+            issue.sla_acknowledged = now <= issue.created_at + timedelta(hours=1)
+            issue.save(update_fields=['assigned_to', 'sla_acknowledged'])
             serializer = self.get_serializer(issue)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -312,7 +329,6 @@ class IssuesViewSet(viewsets.ModelViewSet):
                     {'detail': 'Only the assigned admin can resolve this issue.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-            from django.utils import timezone
             issue.status = 'completed'
             issue.resolved_on = timezone.now()
             issue.resolved_by = request.user
@@ -342,6 +358,7 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 issue.status = 'pending'
                 issue.resolved_on = None
                 issue.resolved_by = None
+                issue.escalation_tier = 0
                 issue.save()
 
                 context = {
@@ -374,6 +391,12 @@ class IssuesViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         issue = serializer.save()
+
+        # Auto-set SLA resolve deadline from severity
+        hours = SLA_HOURS.get(issue.severity, 24)
+        issue.sla_resolve_by = issue.created_at + timedelta(hours=hours)
+        issue.save(update_fields=['sla_resolve_by'])
+
         headers = self.get_success_headers(serializer.data)
 
         reporter = issue.reported_by
@@ -384,6 +407,8 @@ class IssuesViewSet(viewsets.ModelViewSet):
             'description': issue.description,
             'reported_by': reporter_name,
             'date': issue.created_at,
+            'severity': issue.get_severity_display(),
+            'sla_resolve_by': issue.sla_resolve_by,
         }
 
         notify_all_admins_async(subject="New Issue Reported", context=context, email_type="admin")
