@@ -6,7 +6,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
-router.register(r'issues', IssuesViewSet)
+router.register(r'issues', IssuesViewSet, basename='issues')
 router.register(r'messages', ConversationsViewSet)
 
 urlpatterns = [
