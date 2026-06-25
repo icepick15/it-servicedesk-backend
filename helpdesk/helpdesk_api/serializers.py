@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import authenticate
 from django.utils import timezone
 
-from .models import User, Issues, Conversations
+from .models import User, Issues, Conversations, Attachment
+from .constants import SLA_HOURS
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
@@ -43,18 +46,50 @@ class UserBasicSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'first_name', 'last_name', 'email', 'role', 'department']
 
+class AttachmentSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Attachment
+        fields = ['id', 'original_name', 'file_size', 'url', 'uploaded_at']
+
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url
+
 class SLAMixin:
-    """Shared SLA status computation for list and detail serializers."""
+    """Shared SLA status computation for list and detail serializers.
+
+    Two-phase model:
+      Phase 1 — unclaimed: 1-hour claim window starting at created_at.
+      Phase 2 — claimed:   resolution window starting at claim time
+                           (sla_resolve_by = claim_time + severity_hours).
+    """
     def get_sla_status(self, obj):
         if obj.status == 'completed':
             return 'resolved'
+
+        now = timezone.now()
+
+        # Phase 1 — ticket not yet claimed
+        if obj.assigned_to_id is None:
+            one_hour_mark = obj.created_at + timedelta(hours=1)
+            return 'unclaimed_breach' if now >= one_hour_mark else 'unclaimed'
+
+        # Phase 2 — ticket claimed, resolution clock is running
         if not obj.sla_resolve_by:
             return None
-        now = timezone.now()
+
         if now >= obj.sla_resolve_by:
             return 'breached'
-        elapsed = (now - obj.created_at).total_seconds()
-        total = (obj.sla_resolve_by - obj.created_at).total_seconds()
+
+        # Derive claim time to compute % elapsed
+        total_hours = SLA_HOURS.get(obj.severity, 24)
+        claim_time = obj.sla_resolve_by - timedelta(hours=total_hours)
+        elapsed = (now - claim_time).total_seconds()
+        total = total_hours * 3600
         if total > 0 and elapsed / total >= 0.75:
             return 'warning'
         return 'on_track'
@@ -80,6 +115,7 @@ class IssuesListSerializer(SLAMixin, serializers.ModelSerializer):
 
 class IssuesSerializer(SLAMixin, serializers.ModelSerializer):
     conversations = serializers.SerializerMethodField()
+    attachments = serializers.SerializerMethodField()
     assigned_to_details = UserBasicSerializer(source='assigned_to', read_only=True)
     resolved_by_details = UserBasicSerializer(source='resolved_by', read_only=True)
     reported_by_details = UserBasicSerializer(source='reported_by', read_only=True)
@@ -92,13 +128,17 @@ class IssuesSerializer(SLAMixin, serializers.ModelSerializer):
             'reported_by', 'reported_by_details', 'resolved_on',
             'assigned_to', 'assigned_to_details',
             'resolved_by', 'resolved_by_details',
-            'conversations',
+            'conversations', 'attachments',
             'sla_resolve_by', 'sla_acknowledged', 'sla_status',
         ]
 
     def get_conversations(self, obj):
         qs = obj.conversations.all().order_by('timestamp')
         return ConversationsSerializer(qs, many=True).data
+
+    def get_attachments(self, obj):
+        qs = obj.attachments.all()
+        return AttachmentSerializer(qs, many=True, context=self.context).data
 
 class ConversationsSerializer(serializers.ModelSerializer):
     class Meta:

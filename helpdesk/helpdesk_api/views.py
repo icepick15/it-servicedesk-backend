@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
 from rest_framework import status
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from helpdesk.utils.microsoft import verify_microsoft_token
@@ -24,15 +24,10 @@ from email.message import EmailMessage
 from dotenv import load_dotenv
 load_dotenv()
 
-SLA_HOURS = {
-    'critical': 6,
-    'high': 12,
-    'low': 24,
-    'minor': 48,
-}
+from .constants import SLA_HOURS
 
-from .models import User, Issues, Conversations
-from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, IssuesListSerializer, ConversationsSerializer
+from .models import User, Issues, Conversations, Attachment, ALLOWED_ATTACHMENT_EXTENSIONS
+from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, IssuesListSerializer, ConversationsSerializer, AttachmentSerializer
 
 def is_admin_user(user):
     return user.is_superuser or (user.role or '').lower() == 'admin'
@@ -240,7 +235,8 @@ class IssuesViewSet(viewsets.ModelViewSet):
         if self.action == 'list':
             return base.annotate(conversation_count=Count('conversations'))
         return base.prefetch_related(
-            Prefetch('conversations', queryset=Conversations.objects.select_related('sender'))
+            Prefetch('conversations', queryset=Conversations.objects.select_related('sender')),
+            'attachments',
         )
 
     def get_serializer_class(self):
@@ -263,7 +259,10 @@ class IssuesViewSet(viewsets.ModelViewSet):
             now = timezone.now()
             issue.assigned_to = request.user
             issue.sla_acknowledged = now <= issue.created_at + timedelta(hours=1)
-            issue.save(update_fields=['assigned_to', 'sla_acknowledged'])
+            # Resolution clock starts from the moment of claiming
+            hours = SLA_HOURS.get(issue.severity, 24)
+            issue.sla_resolve_by = now + timedelta(hours=hours)
+            issue.save(update_fields=['assigned_to', 'sla_acknowledged', 'sla_resolve_by'])
             serializer = self.get_serializer(issue)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -392,11 +391,6 @@ class IssuesViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         issue = serializer.save()
 
-        # Auto-set SLA resolve deadline from severity
-        hours = SLA_HOURS.get(issue.severity, 24)
-        issue.sla_resolve_by = issue.created_at + timedelta(hours=hours)
-        issue.save(update_fields=['sla_resolve_by'])
-
         headers = self.get_success_headers(serializer.data)
 
         reporter = issue.reported_by
@@ -415,6 +409,40 @@ class IssuesViewSet(viewsets.ModelViewSet):
         send_mail_async(subject="Issue Reported Successfully", to_email=reporter.email, context=context, type="user")
 
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @action(detail=True, methods=['post'], url_path='attachments')
+    def upload_attachments(self, request, pk=None):
+        issue = self.get_object()
+        files = request.FILES.getlist('files')
+
+        if not files:
+            return Response({'detail': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+        created = []
+        for f in files:
+            ext = f.name.rsplit('.', 1)[-1].lower() if '.' in f.name else ''
+            if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
+                return Response(
+                    {'detail': f'File type ".{ext}" is not allowed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if f.size > MAX_SIZE:
+                return Response(
+                    {'detail': f'"{f.name}" exceeds the 10 MB limit.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            attachment = Attachment.objects.create(
+                issue=issue,
+                file=f,
+                original_name=f.name,
+                file_size=f.size,
+                uploaded_by=request.user,
+            )
+            created.append(attachment)
+
+        serializer = AttachmentSerializer(created, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ConversationsViewSet(viewsets.ModelViewSet):
     queryset = Conversations.objects.all()

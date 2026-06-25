@@ -21,6 +21,8 @@ services:
       DEBUG: "False"
     depends_on:
       - db
+    volumes:
+      - media_data:/app/media
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
@@ -28,3 +30,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:

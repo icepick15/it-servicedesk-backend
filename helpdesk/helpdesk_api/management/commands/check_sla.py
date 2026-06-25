@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from helpdesk_api.models import Issues, User
 from helpdesk_api.views import send_mail
+from helpdesk_api.constants import SLA_HOURS
 
 IT_HEAD_EMAIL = 'doyin.abiodun@crccreditbureau.net'
 
@@ -15,8 +16,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         now = timezone.now()
 
+        # Include ALL pending tickets — unclaimed ones have no sla_resolve_by yet
         pending_issues = (
-            Issues.objects.filter(status='pending', sla_resolve_by__isnull=False)
+            Issues.objects.filter(status='pending')
             .select_related('reported_by', 'assigned_to')
         )
 
@@ -28,20 +30,15 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'SLA check complete — {checked} issue(s) evaluated.'))
 
     def _check_issue(self, issue, now):
-        sla_resolve_by = issue.sla_resolve_by
-        created_at = issue.created_at
-        total_seconds = (sla_resolve_by - created_at).total_seconds()
-        elapsed_seconds = (now - created_at).total_seconds()
-        pct_elapsed = elapsed_seconds / total_seconds if total_seconds > 0 else 0
-
         ticket_id = f'CRC-{issue.id}'
         reporter_name = (
             f"{issue.reported_by.first_name or ''} {issue.reported_by.last_name or ''}".strip()
             or issue.reported_by.email
         )
 
-        # Tier 1 — Unclaimed after 1 hour → notify 3 regular admins (not IT Head)
-        one_hour_mark = created_at + timedelta(hours=1)
+        # ── Tier 1 — Unclaimed after 1 hour ──────────────────────────────────
+        # Notify 3 regular admins (not IT Head). Fires regardless of sla_resolve_by.
+        one_hour_mark = issue.created_at + timedelta(hours=1)
         if now >= one_hour_mark and issue.assigned_to is None and issue.escalation_tier < 1:
             regular_admins = list(
                 User.objects.filter(role__iexact='admin', is_superuser=False, is_active=True)
@@ -54,8 +51,7 @@ class Command(BaseCommand):
                 'description': issue.description,
                 'reported_by': reporter_name,
                 'severity': issue.get_severity_display(),
-                'created_at': created_at,
-                'sla_resolve_by': sla_resolve_by,
+                'created_at': issue.created_at,
                 'cta_url': f'https://itservicedesk.creditreferencenigeria.net/admin/issues/{issue.id}',
             }
             for email in regular_admins:
@@ -69,7 +65,19 @@ class Command(BaseCommand):
             issue.save(update_fields=['escalation_tier'])
             self.stdout.write(f'  Tier 1 fired for {ticket_id} → {len(regular_admins)} admin(s) notified.')
 
-        # Tier 2 — 75 % of SLA elapsed, before breach → notify assigned admin only
+        # Tier 2 & 3 only apply once the ticket is claimed (sla_resolve_by is set)
+        if not issue.sla_resolve_by:
+            return
+
+        sla_resolve_by = issue.sla_resolve_by
+        total_hours = SLA_HOURS.get(issue.severity, 24)
+        claim_time = sla_resolve_by - timedelta(hours=total_hours)
+        elapsed_seconds = (now - claim_time).total_seconds()
+        total_seconds = total_hours * 3600
+        pct_elapsed = elapsed_seconds / total_seconds if total_seconds > 0 else 0
+
+        # ── Tier 2 — 75 % of resolution SLA elapsed ──────────────────────────
+        # Notify assigned admin only, while still before the deadline.
         if (
             issue.assigned_to is not None
             and pct_elapsed >= 0.75
@@ -87,7 +95,7 @@ class Command(BaseCommand):
                 'cta_url': f'https://itservicedesk.creditreferencenigeria.net/admin/issues/{issue.id}',
             }
             send_mail(
-                subject=f'[SLA Warning] Ticket {ticket_id} — 75 % of SLA Elapsed',
+                subject=f'[SLA Warning] Ticket {ticket_id} — 75% of Resolution SLA Elapsed',
                 to_email=issue.assigned_to.email,
                 context=context,
                 type='sla_resolution_warning',
@@ -96,7 +104,8 @@ class Command(BaseCommand):
             issue.save(update_fields=['escalation_tier'])
             self.stdout.write(f'  Tier 2 fired for {ticket_id} → {issue.assigned_to.email}.')
 
-        # Tier 3 — Resolution deadline breached → notify assigned admin + IT Head
+        # ── Tier 3 — Resolution deadline breached ────────────────────────────
+        # Notify assigned admin + IT Head.
         if now >= sla_resolve_by and issue.escalation_tier < 3:
             hours_overdue = round((now - sla_resolve_by).total_seconds() / 3600, 1)
             context = {
@@ -109,14 +118,12 @@ class Command(BaseCommand):
                 'hours_overdue': hours_overdue,
                 'cta_url': f'https://itservicedesk.creditreferencenigeria.net/admin/issues/{issue.id}',
             }
-            # Always notify IT Head
             send_mail(
                 subject=f'[SLA BREACH] Ticket {ticket_id} — Resolution Deadline Exceeded',
                 to_email=IT_HEAD_EMAIL,
                 context=context,
                 type='sla_resolution_breach',
             )
-            # Also notify the assignee if they are different from IT Head
             if issue.assigned_to and issue.assigned_to.email.lower() != IT_HEAD_EMAIL.lower():
                 send_mail(
                     subject=f'[SLA BREACH] Ticket {ticket_id} — Resolution Deadline Exceeded',
