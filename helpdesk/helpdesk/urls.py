@@ -15,17 +15,19 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
-from django.conf.urls.static import static
+from django.views.static import serve
 
 from helpdesk_api.views import MyTokenObtainPairView
-from rest_framework_simplejwt.views import (TokenRefreshView)
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
     # JWT endpoints
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('admin/', admin.site.urls),
-    path('api/', include('helpdesk_api.urls'))
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    path('api/', include('helpdesk_api.urls')),
+    # Serve uploaded media files via Django/gunicorn (works in both DEBUG modes)
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+]
