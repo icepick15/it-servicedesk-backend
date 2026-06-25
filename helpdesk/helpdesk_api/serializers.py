@@ -31,6 +31,11 @@ class UserSerializer(serializers.ModelSerializer):
             'is_superuser': {'read_only': True},
         }
 
+    def validate_role(self, value):
+        if value.lower() not in VALID_ROLES:
+            raise serializers.ValidationError(f'Invalid role. Choose from: {", ".join(sorted(VALID_ROLES))}.')
+        return value.lower()
+
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         instance = self.Meta.model(**validated_data)
@@ -94,6 +99,10 @@ class SLAMixin:
             return 'warning'
         return 'on_track'
 
+VALID_SEVERITIES = {'critical', 'high', 'low', 'minor'}
+VALID_STATUSES   = {'pending', 'completed'}
+VALID_ROLES      = {'staff', 'admin'}
+
 class IssuesListSerializer(SLAMixin, serializers.ModelSerializer):
     """Lightweight serializer for list views — no conversation payloads."""
     assigned_to_details = UserBasicSerializer(source='assigned_to', read_only=True)
@@ -101,6 +110,7 @@ class IssuesListSerializer(SLAMixin, serializers.ModelSerializer):
     reported_by_details = UserBasicSerializer(source='reported_by', read_only=True)
     conversation_count = serializers.IntegerField(read_only=True)  # from queryset annotation
     sla_status = serializers.SerializerMethodField()
+    description = serializers.CharField(max_length=5000)
 
     class Meta:
         model = Issues
@@ -113,6 +123,16 @@ class IssuesListSerializer(SLAMixin, serializers.ModelSerializer):
             'sla_resolve_by', 'sla_acknowledged', 'sla_status',
         ]
 
+    def validate_severity(self, value):
+        if value not in VALID_SEVERITIES:
+            raise serializers.ValidationError(f'Invalid severity. Choose from: {", ".join(sorted(VALID_SEVERITIES))}.')
+        return value
+
+    def validate_status(self, value):
+        if value not in VALID_STATUSES:
+            raise serializers.ValidationError(f'Invalid status. Choose from: {", ".join(sorted(VALID_STATUSES))}.')
+        return value
+
 class IssuesSerializer(SLAMixin, serializers.ModelSerializer):
     conversations = serializers.SerializerMethodField()
     attachments = serializers.SerializerMethodField()
@@ -120,6 +140,7 @@ class IssuesSerializer(SLAMixin, serializers.ModelSerializer):
     resolved_by_details = UserBasicSerializer(source='resolved_by', read_only=True)
     reported_by_details = UserBasicSerializer(source='reported_by', read_only=True)
     sla_status = serializers.SerializerMethodField()
+    description = serializers.CharField(max_length=5000)
 
     class Meta:
         model = Issues
@@ -132,6 +153,16 @@ class IssuesSerializer(SLAMixin, serializers.ModelSerializer):
             'sla_resolve_by', 'sla_acknowledged', 'sla_status',
         ]
 
+    def validate_severity(self, value):
+        if value not in VALID_SEVERITIES:
+            raise serializers.ValidationError(f'Invalid severity. Choose from: {", ".join(sorted(VALID_SEVERITIES))}.')
+        return value
+
+    def validate_status(self, value):
+        if value not in VALID_STATUSES:
+            raise serializers.ValidationError(f'Invalid status. Choose from: {", ".join(sorted(VALID_STATUSES))}.')
+        return value
+
     def get_conversations(self, obj):
         qs = obj.conversations.all().order_by('timestamp')
         return ConversationsSerializer(qs, many=True).data
@@ -141,6 +172,13 @@ class IssuesSerializer(SLAMixin, serializers.ModelSerializer):
         return AttachmentSerializer(qs, many=True, context=self.context).data
 
 class ConversationsSerializer(serializers.ModelSerializer):
+    message = serializers.CharField(max_length=2000)
+
     class Meta:
         model = Conversations
         fields = ['id', 'issue', 'message', 'sender', 'mentioned_users', 'timestamp']
+
+    def validate_message(self, value):
+        if not value.strip():
+            raise serializers.ValidationError('Message cannot be blank.')
+        return value

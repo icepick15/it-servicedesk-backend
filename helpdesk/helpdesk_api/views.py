@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.throttling import AnonRateThrottle
 
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny
@@ -153,11 +154,12 @@ def microsoft_login(request):
         "email": email
     })
 
+class LoginRateThrottle(AnonRateThrottle):
+    scope = 'login'
+
 class MyTokenObtainPairView(TokenObtainPairView):
-    """
-    Custom TokenObtainPairView using MyTokenObtainPairSerializer.
-    """
     serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 @api_view(['GET'])
 def issue_stats(request):
@@ -232,6 +234,9 @@ class IssuesViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         base = Issues.objects.select_related('reported_by', 'assigned_to', 'resolved_by')
+        # Staff can only see their own issues; admins see all
+        if not is_admin_user(self.request.user):
+            base = base.filter(reported_by=self.request.user)
         if self.action == 'list':
             return base.annotate(conversation_count=Count('conversations'))
         return base.prefetch_related(
@@ -249,8 +254,13 @@ class IssuesViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
         action = data.pop('action', None)
 
-        # --- CLAIM: any IT admin can claim an unassigned ticket ---
+        # --- CLAIM: only IT admins can claim a ticket ---
         if action == 'claim':
+            if not is_admin_user(request.user):
+                return Response(
+                    {'detail': 'Only IT admins can claim issues.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             if issue.assigned_to is not None:
                 return Response(
                     {'detail': 'This issue has already been claimed.'},
@@ -349,7 +359,12 @@ class IssuesViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(issue)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
-        # --- REOPEN / generic status change (existing behaviour) ---
+        # --- REOPEN / generic status change — admin only ---
+        if not is_admin_user(request.user):
+            return Response(
+                {'detail': 'You do not have permission to modify this issue.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         new_status = data.pop('status', None)
 
         if new_status is not None and new_status != issue.status:
@@ -413,16 +428,46 @@ class IssuesViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='attachments')
     def upload_attachments(self, request, pk=None):
         issue = self.get_object()
+
+        # Only the issue reporter or an admin/assignee may attach files
+        is_reporter = issue.reported_by_id == request.user.id
+        is_assignee = issue.assigned_to_id == request.user.id
+        if not (is_reporter or is_assignee or is_admin_user(request.user)):
+            return Response(
+                {'detail': 'You do not have permission to attach files to this issue.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         files = request.FILES.getlist('files')
 
         if not files:
             return Response({'detail': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        MAX_SIZE = 10 * 1024 * 1024      # 10 MB for documents/images
-        MAX_VIDEO_SIZE = 25 * 1024 * 1024 # 25 MB for MP4 (~10 sec 1080p)
+        MAX_SIZE = 10 * 1024 * 1024       # 10 MB for documents/images
+        MAX_VIDEO_SIZE = 25 * 1024 * 1024  # 25 MB for MP4
+
+        # Extensions that must never appear anywhere in a filename
+        DANGEROUS_EXTS = {
+            'php', 'php3', 'php4', 'php5', 'phtml',
+            'py', 'rb', 'sh', 'bash', 'pl', 'cgi',
+            'asp', 'aspx', 'jsp', 'exe', 'bat', 'cmd', 'ps1',
+        }
+
         created = []
         for f in files:
-            ext = f.name.rsplit('.', 1)[-1].lower() if '.' in f.name else ''
+            # Strip path components from the filename before any checks
+            safe_name = os.path.basename(f.name)
+
+            parts = safe_name.lower().split('.')
+            ext = parts[-1] if len(parts) > 1 else ''
+
+            # Block allowed-looking extensions that hide dangerous ones (e.g. evil.php.jpg)
+            if any(part in DANGEROUS_EXTS for part in parts[:-1]):
+                return Response(
+                    {'detail': f'"{safe_name}" contains a disallowed file type.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
                 return Response(
                     {'detail': f'File type ".{ext}" is not allowed.'},
@@ -430,15 +475,15 @@ class IssuesViewSet(viewsets.ModelViewSet):
                 )
             limit = MAX_VIDEO_SIZE if ext in VIDEO_EXTENSIONS else MAX_SIZE
             if f.size > limit:
-                label = '100 MB' if ext in VIDEO_EXTENSIONS else '10 MB'
+                label = '25 MB' if ext in VIDEO_EXTENSIONS else '10 MB'
                 return Response(
-                    {'detail': f'"{f.name}" exceeds the {label} limit.'},
+                    {'detail': f'"{safe_name}" exceeds the {label} limit.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             attachment = Attachment.objects.create(
                 issue=issue,
                 file=f,
-                original_name=f.name,
+                original_name=safe_name,
                 file_size=f.size,
                 uploaded_by=request.user,
             )
@@ -455,9 +500,12 @@ class ConversationsViewSet(viewsets.ModelViewSet):
     filterset_fields = ['issue']
 
     def create(self, request, *args, **kwargs):
+        # Always use the authenticated user as sender — ignore any client-supplied sender ID
+        request.data['sender'] = request.user.id
+
         message = request.data.get('message')
         issue = Issues.objects.get(id=request.data.get('issue'))
-        sender = User.objects.get(id=request.data.get('sender'))
+        sender = request.user
 
         sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or sender.email
 
