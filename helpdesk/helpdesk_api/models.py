@@ -102,7 +102,10 @@ ALLOWED_ATTACHMENT_EXTENSIONS = {
     'jpg', 'jpeg', 'png', 'webp', 'gif',
     'pdf', 'doc', 'docx', 'xls', 'xlsx',
     'txt', 'csv', 'zip',
+    'mp4',
 }
+
+VIDEO_EXTENSIONS = {'mp4'}
 
 class Attachment(models.Model):
     issue = models.ForeignKey(Issues, on_delete=models.CASCADE, related_name='attachments')

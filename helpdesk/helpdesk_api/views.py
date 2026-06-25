@@ -26,7 +26,7 @@ load_dotenv()
 
 from .constants import SLA_HOURS
 
-from .models import User, Issues, Conversations, Attachment, ALLOWED_ATTACHMENT_EXTENSIONS
+from .models import User, Issues, Conversations, Attachment, ALLOWED_ATTACHMENT_EXTENSIONS, VIDEO_EXTENSIONS
 from .serializers import MyTokenObtainPairSerializer, UserSerializer, IssuesSerializer, IssuesListSerializer, ConversationsSerializer, AttachmentSerializer
 
 def is_admin_user(user):
@@ -418,7 +418,8 @@ class IssuesViewSet(viewsets.ModelViewSet):
         if not files:
             return Response({'detail': 'No files provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+        MAX_SIZE = 10 * 1024 * 1024      # 10 MB for documents/images
+        MAX_VIDEO_SIZE = 25 * 1024 * 1024 # 25 MB for MP4 (~10 sec 1080p)
         created = []
         for f in files:
             ext = f.name.rsplit('.', 1)[-1].lower() if '.' in f.name else ''
@@ -427,9 +428,11 @@ class IssuesViewSet(viewsets.ModelViewSet):
                     {'detail': f'File type ".{ext}" is not allowed.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if f.size > MAX_SIZE:
+            limit = MAX_VIDEO_SIZE if ext in VIDEO_EXTENSIONS else MAX_SIZE
+            if f.size > limit:
+                label = '100 MB' if ext in VIDEO_EXTENSIONS else '10 MB'
                 return Response(
-                    {'detail': f'"{f.name}" exceeds the 10 MB limit.'},
+                    {'detail': f'"{f.name}" exceeds the {label} limit.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             attachment = Attachment.objects.create(
